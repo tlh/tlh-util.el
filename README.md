@@ -16,7 +16,8 @@ stomping.
 1. Put <tt>tlh-util.el</tt> somewhere on your emacs load path.
 
 2. Add this line to your .emacs file:
-   <tt>(require 'tlh-util)</tt>
+
+    <tt>(require 'tlh-util)</tt>
 
 ## License
 
