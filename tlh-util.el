@@ -351,6 +351,19 @@ determines whether a value is a sub-alist or a leaf."
       (delete-file file-name)
       (kill-this-buffer))))
 
+;; backward transposition
+
+(defmacro def-backward-transpose (things)
+  `(defun ,(symcat 'backward-transpose- things) ()
+     (interactive)
+     (,(symcat 'transpose- things) -1)))
+
+(def-backward-transpose chars)
+(def-backward-transpose words)
+(def-backward-transpose lines)
+(def-backward-transpose paragraphs)
+(def-backward-transpose sexps)
+
 ;; windows operations and navigation
 
 (defun inc-window-height (&optional inc)
@@ -478,7 +491,7 @@ determines whether a value is a sub-alist or a leaf."
 order unless DESCENDING is non-nil."
   (sort buffer-list
         (lambda (b1 b2) (let ((res (string< (buffer-name b2) (buffer-name b1))))
-                     (if descending res (not res))))))
+                          (if descending res (not res))))))
 
 (defun remove-elc ()
   (let ((elc (concat (buffer-file-name) "c")))

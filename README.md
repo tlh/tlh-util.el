@@ -21,4 +21,4 @@ stomping.
 
 ## License
 
-None.
+None.  See comments above.
