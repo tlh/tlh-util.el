@@ -618,4 +618,80 @@ order unless DESCENDING is non-nil."
 (defun remove-elc-on-save ()
   (add-hook (make-local-variable 'after-save-hook) 'remove-elc))
 
+;; play sound
+
+(defvar play-sound-function nil
+  "A function that takes one argument, a fully-qualified
+  filename, and plays the file.")
+
+(defun play-sound (filename)
+  (funcall (symbol-function play-sound-function) filename))
+
+;; ding
+
+(defvar quiet-functions nil
+  "List of functions on which `pretty-ding' shouldn't ding.")
+
+(defvar ding-sound nil
+  "Audio file played by `pretty-ding'.")
+
+(defvar yell-sound nil
+  "Audio file played by `yell-at-me'.")
+
+(defun pretty-ding ()
+  (unless (memq this-command quiet-functions)
+    (funcall (symbol-function play-sound-function)
+             ding-sound)))
+
+(defun yell-at-me (&optional msg)
+  (interactive)
+  (play-sound yell-sound)
+  (message (or msg (yow))))
+
+;; notify
+
+(defvar notify-function nil
+  "A function that takes two arguments, a string TITLE and a
+string MESSAGE, and creates a notification.")
+
+(defun notify (title message)
+  (funcall (symbol-function notify-function) title message))
+
+;; system volume
+
+(defvar system-volume 30 "System audio volume [0-100]")
+
+(defvar system-volume-muted nil "Boolean mute value.")
+
+(defvar set-volume-function nil
+  "A function of one argument, a number [0-100],
+and sets the system volume accordingly.")
+
+(defvar volume-increment 5
+  "Default increment of `system-volume' [0-100].")
+
+(defun set-volume (vol &optional no-update)
+  "Set volume to VOL [0-100]"
+  (interactive "nVolume [0-100]: ")
+  (let ((vol (confine-to 0 100 vol)))
+    (unless no-update (setq system-volume vol))
+    (funcall (symbol-function set-volume-function) vol)))
+
+(defun mute-volume ()
+  (interactive)
+  (set-volume (if system-volume-muted system-volume 0) t)
+  (setq system-volume-muted (not system-volume-muted)))
+
+(defun increase-volume (&optional inc)
+  (interactive)
+  (set-volume (+ system-volume (or inc volume-increment))))
+
+(defun decrease-volume (&optional dec)
+  (interactive)
+  (set-volume (+ system-volume (- (or dec volume-increment)))))
+
+;; provide
+
 (provide 'tlh-util)
+
+;;; tlh-util.el ends here
