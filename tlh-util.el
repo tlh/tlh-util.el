@@ -3,9 +3,9 @@
 ;; Commentary:
 ;;
 ;;  This is a collection of elisp utility functions and macros I've
-;;  found useful at some point.  I've written most myself, but some
-;;  are cannibalized from elsewhere.  I tried giving credit where due,
-;;  but found that most of the time the person I got it from had
+;;  found useful at some point.  Most are written by me, but some are
+;;  cannibalized from elsewhere.  I tried giving credit where due, but
+;;  found that most of the time the person I got it from had
 ;;  themselves gotten it from someone else, and on backward into the
 ;;  mist.  So I've done away with credit, and therefore take credit
 ;;  for none of it.
@@ -147,6 +147,9 @@
            (expt (- x1 x2) 2))))
 
 ;; operations on lists
+
+(defun add-all-to-list (list-var &rest args)
+  (mapc (lambda (elt) (add-to-list list-var elt)) args))
 
 (defun oney (lst)
   (and (consp lst)
@@ -350,6 +353,23 @@ determines whether a value is a sub-alist or a leaf."
     (when (yes-or-no-p "Really delete this file?")
       (delete-file file-name)
       (kill-this-buffer))))
+
+(defun unmatched-paren (&optional next)
+  (let ((pos (point)))
+    (save-excursion
+      (condition-case err
+          (while (setq pos (scan-sexps pos (if next 1 -1)))
+            (goto-char pos))
+        (scan-error (nth 2 err))))))
+
+(defun close-all-parens ()
+  (interactive)
+  (let (pos)
+    (while (setq pos (unmatched-paren))
+      (insert
+       (char-to-string
+        (matching-paren
+         (char-after pos)))))))
 
 ;; backward transposition
 
@@ -617,78 +637,6 @@ order unless DESCENDING is non-nil."
 
 (defun remove-elc-on-save ()
   (add-hook (make-local-variable 'after-save-hook) 'remove-elc))
-
-;; play sound
-
-(defvar play-sound-function nil
-  "A function that takes one argument, a fully-qualified
-  filename, and plays the file.")
-
-(defun play-sound (filename)
-  (funcall (symbol-function play-sound-function) filename))
-
-;; ding
-
-(defvar quiet-functions nil
-  "List of functions on which `pretty-ding' shouldn't ding.")
-
-(defvar ding-sound nil
-  "Audio file played by `pretty-ding'.")
-
-(defvar yell-sound nil
-  "Audio file played by `yell-at-me'.")
-
-(defun pretty-ding ()
-  (unless (memq this-command quiet-functions)
-    (funcall (symbol-function play-sound-function)
-             ding-sound)))
-
-(defun yell-at-me (&optional msg)
-  (interactive)
-  (play-sound yell-sound)
-  (message (or msg (yow))))
-
-;; notify
-
-(defvar notify-function nil
-  "A function that takes two arguments, a string TITLE and a
-string MESSAGE, and creates a notification.")
-
-(defun notify (title message)
-  (funcall (symbol-function notify-function) title message))
-
-;; system volume
-
-(defvar system-volume 30 "System audio volume [0-100]")
-
-(defvar system-volume-muted nil "Boolean mute value.")
-
-(defvar set-volume-function nil
-  "A function of one argument, a number [0-100],
-and sets the system volume accordingly.")
-
-(defvar volume-increment 5
-  "Default increment of `system-volume' [0-100].")
-
-(defun set-volume (vol &optional no-update)
-  "Set volume to VOL [0-100]"
-  (interactive "nVolume [0-100]: ")
-  (let ((vol (confine-to 0 100 vol)))
-    (unless no-update (setq system-volume vol))
-    (funcall (symbol-function set-volume-function) vol)))
-
-(defun mute-volume ()
-  (interactive)
-  (set-volume (if system-volume-muted system-volume 0) t)
-  (setq system-volume-muted (not system-volume-muted)))
-
-(defun increase-volume (&optional inc)
-  (interactive)
-  (set-volume (+ system-volume (or inc volume-increment))))
-
-(defun decrease-volume (&optional dec)
-  (interactive)
-  (set-volume (+ system-volume (- (or dec volume-increment)))))
 
 ;; provide
 
