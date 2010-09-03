@@ -506,28 +506,6 @@ determines whether a value is a sub-alist or a leaf."
   (interactive)
   (redraw-frame (selected-frame)))
 
-;; time
-
-(defun time->secs (time)
-  (+ (* (car time) (expt 2 16)) (cadr time) (/ (caddr time) 1000000.0)))
-
-(defmacro make-time-op (name op)
-  `(defun ,name (&rest times)
-     (list (apply ,op (apply 'nths 0 times))
-           (apply ,op (apply 'nths 1 times))
-           (apply ,op (apply 'nths 2 times)))))
-
-(make-time-op time-- '-)
-(make-time-op time-+ '+)
-(make-time-op time-* '*)
-(make-time-op time-/ '/)
-
-(defmacro time-body (&rest body)
-  (let ((old (gensym)))
-    `(let ((,old (current-time)))
-       ,@body
-       (time->secs (time-- (current-time) ,old)))))
-
 ;; misc
 
 (defun sort-buffer-list (buffer-list &optional descending)
@@ -655,6 +633,14 @@ order unless DESCENDING is non-nil."
             (make-string (max 0 (1- pos)) ?=)
             knob-str
             (make-string (- len pos) ?-))))
+
+(defmacro time-body (&rest body)
+  (with-gensyms (old)
+    `(let ((,old (current-time)))
+       ,@body
+       (subtract-time (current-time) ,old))))
+
+(decode-time (time-body (dotimes (i 100000) i)))
 
 ;; buffer hook functions
 
