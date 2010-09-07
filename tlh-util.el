@@ -55,11 +55,6 @@
                 ,(cadr args)
               (cif ,@(cddr args))))))
 
-(defmacro with-bounds (type &rest body)
-  (declare (indent defun))
-  `(dbind (beg . end) (bounds-of-thing-at-point ,type)
-     ,@body))
-
 (defmacro cmd (&rest body)
   `(lambda () (interactive) ,@body))
 
@@ -336,27 +331,12 @@ determines whether a value is a sub-alist or a leaf."
   (untabify-buffer)
   (delete-trailing-whitespace))
 
-(defun kill-ring-save-line ()
-  (interactive)
-  (kill-ring-save (point) (line-end-position)))
-
 (defun backward-kill-word-or-bol (arg)
   (interactive "p")
   (let ((bol (save-excursion (beginning-of-line) (point)))
         (bw  (save-excursion (backward-word arg) (point)))
         (p   (point)))
     (kill-region p (if (= p bol) bw (max bol bw)))))
-
-(defun replace-regexp-whole-buffer (regexp to-string &optional delimited start end)
-  (interactive
-   (let ((m (and transient-mark-mode mark-active))
-         (word (if current-prefix-arg "word " "")))
-     (append (query-replace-read-args
-              (concat "Replace " word "regexp " (if m "in region" ""))
-              t)
-             (when m (list (region-beginning) (region-end))))))
-  (mark-whole-buffer)
-  (perform-replace regexp to-string nil t delimited nil nil start end))
 
 (defun unfill-paragraph ()
   (interactive)
@@ -392,68 +372,175 @@ determines whether a value is a sub-alist or a leaf."
 (def-backward-transpose paragraphs)
 (def-backward-transpose sexps)
 
-;; paragraph/block operations
+;; region operations
 
-(defun comment-block ()
+(defun tlh-bounds-of-thing-at-point (thing)
+  (if (eq thing 'defun)
+      (save-excursion
+        (cons (progn (beginning-of-defun) (point))
+              (progn (end-of-defun) (point))))
+    (bounds-of-thing-at-point thing)))
+
+(defmacro with-bounds (type &rest body)
+  (declare (indent defun))
+  `(dbind (beg . end) (tlh-bounds-of-thing-at-point ,type)
+     ,@body))
+
+(defun duplicate-region (beg end)
+  (interactive "r")
+  (save-excursion
+    (kill-ring-save beg end)
+    (goto-char end)
+    (unless (empty-line-p) (newline))
+    (yank)))
+
+(defun duplicate-and-comment-region (beg end)
+  (interactive "r")
+  (duplicate-region beg end)
+  (comment-region beg end))
+
+(defun kill-region-append-to-file (beg end filename)
+  (interactive "r\nfFile: ")
+  (append-to-file beg end (expand-file-name filename))
+  (kill-region beg end))
+
+;; line region
+
+(defun mark-line ()
+  (interactive)
+  (with-bounds 'line
+    (set-mark end)
+    (goto-char beg)))
+
+(defun comment-line ()
+  (interactive)
+  (with-bounds 'line
+    (comment-region beg end)))
+
+(defun uncomment-line ()
+  (interactive)
+  (with-bounds 'line
+    (uncomment-region beg end)))
+
+(defun comment-or-uncomment-line ()
+  (interactive)
+  (with-bounds 'line
+    (comment-or-uncomment-region beg end)))
+
+(defun kill-whole-line ()
+  (interactive)
+  (with-bounds 'line
+    (kill-region beg end)))
+
+(defun save-line ()
+  (interactive)
+  (kill-ring-save (point) (line-end-position)))
+
+(defun kill-line-append-to-file (filename)
+  (interactive "fFile: ")
+  (with-bounds 'line
+    (kill-region-append-to-file beg end filename)))
+
+(defun duplicate-line ()
+  (interactive)
+  (with-bounds 'line
+    (duplicate-region beg end)))
+
+(defun duplicate-and-comment-line ()
+  (interactive)
+  (with-bounds 'line
+    (duplicate-and-comment-region beg end)))
+
+;; paragraph region
+
+(defun comment-paragraph ()
   (interactive)
   (with-bounds 'paragraph
     (comment-region beg end)))
 
-(defun uncomment-block ()
+(defun uncomment-paragraph ()
   (interactive)
   (with-bounds 'paragraph
     (uncomment-region beg end)))
 
-(defun comment-or-uncomment-block ()
+(defun comment-or-uncomment-paragraph ()
   (interactive)
   (with-bounds 'paragraph
     (comment-or-uncomment-region beg end)))
 
-(defun comment-defun ()
-  (interactive)
-  (comment-region
-   (save-excursion (beginning-of-defun) (point))
-   (save-excursion (end-of-defun) (point))))
-
-(defun kill-block ()
+(defun kill-whole-paragraph ()
   (interactive)
   (with-bounds 'paragraph
     (kill-region beg end)))
 
-(defun save-block ()
+(defun save-paragraph ()
   (interactive)
   (with-bounds 'paragraph
     (kill-ring-save beg end)))
 
-(defun kill-block-append-to-file (filename)
+(defun kill-paragraph-append-to-file (filename)
   (interactive "fFile: ")
   (with-bounds 'paragraph
-    (append-to-file beg end (expand-file-name filename))
-    (kill-region beg end)))
+    (kill-region-append-to-file beg end filename)))
 
-(defun duplicate-block ()
+(defun duplicate-paragraph ()
   (interactive)
-  (save-excursion
-    (with-bounds 'paragraph
-      (kill-ring-save beg end)
-      (goto-char end)
-      (unless (empty-line-p) (newline))
-      (yank))))
+  (with-bounds 'paragraph
+    (duplicate-region beg end)))
 
-(defun duplicate-and-comment-block ()
+(defun duplicate-and-comment-paragraph ()
   (interactive)
-  (duplicate-block)
-  (comment-block))
+  (with-bounds 'paragraph
+    (duplicate-and-comment-region beg end)))
 
-(defun block-align-regexp (regexp)
+(defun indent-paragraph ()
+  (interactive)
+  (with-bounds 'paragraph
+    (indent-region beg end)))
+
+(defun paragraph-align-regexp (regexp)
   (interactive "sRegexp: ")
   (with-bounds 'paragraph
     (align-regexp beg end (concat "\\(\\s-*\\)" regexp) 1 1 nil)
     (untabify beg end)))
 
-(defun indent-block ()
+;; defun region
+
+(defun comment-defun ()
   (interactive)
-  (with-bounds 'paragraph
+  (with-bounds 'defun
+    (comment-region beg end)))
+
+(defun kill-defun ()
+  (interactive)
+  (with-bounds 'defun
+    (kill-region beg end)))
+
+(defun save-defun ()
+  (interactive)
+  (with-bounds 'defun
+    (kill-ring-save beg end)))
+
+(defun kill-defun-append-to-file (filename)
+  (interactive "fFile: ")
+  (with-bounds 'defun
+    (kill-region-append-to-file beg end filename)))
+
+(defun duplicate-defun ()
+  (interactive)
+  (save-excursion
+    (mark-defun)
+    (call-interactively 'duplicate-region)))
+
+(defun duplicate-and-comment-defun ()
+  (interactive)
+  (save-excursion
+    (mark-defun)
+    (call-interactively 'duplicate-and-comment-region)))
+
+(defun indent-defun ()
+  (interactive)
+  (with-bounds 'defun
     (indent-region beg end)))
 
 ;; buffer/file operations
@@ -506,28 +593,6 @@ determines whether a value is a sub-alist or a leaf."
   (interactive)
   (redraw-frame (selected-frame)))
 
-;; time
-
-(defun time->secs (time)
-  (+ (* (car time) (expt 2 16)) (cadr time) (/ (caddr time) 1000000.0)))
-
-(defmacro make-time-op (name op)
-  `(defun ,name (&rest times)
-     (list (apply ,op (apply 'nths 0 times))
-           (apply ,op (apply 'nths 1 times))
-           (apply ,op (apply 'nths 2 times)))))
-
-(make-time-op time-- '-)
-(make-time-op time-+ '+)
-(make-time-op time-* '*)
-(make-time-op time-/ '/)
-
-(defmacro time-body (&rest body)
-  (let ((old (gensym)))
-    `(let ((,old (current-time)))
-       ,@body
-       (time->secs (time-- (current-time) ,old)))))
-
 ;; misc
 
 (defun sort-buffer-list (buffer-list &optional descending)
@@ -535,7 +600,7 @@ determines whether a value is a sub-alist or a leaf."
 order unless DESCENDING is non-nil."
   (sort buffer-list
         (lambda (b1 b2) (let ((res (string< (buffer-name b2) (buffer-name b1))))
-                          (if descending res (not res))))))
+                     (if descending res (not res))))))
 
 (defun remove-elc ()
   (let ((elc (concat (buffer-file-name) "c")))
@@ -655,6 +720,12 @@ order unless DESCENDING is non-nil."
             (make-string (max 0 (1- pos)) ?=)
             knob-str
             (make-string (- len pos) ?-))))
+
+(defmacro time-body (&rest body)
+  (with-gensyms (old)
+    `(let ((,old (current-time)))
+       ,@body
+       (subtract-time (current-time) ,old))))
 
 ;; buffer hook functions
 
