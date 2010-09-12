@@ -278,6 +278,13 @@ determines whether a value is a sub-alist or a leaf."
     (scroll-down (or arg 1))
     (previous-line (or arg 1))))
 
+(defun goto-buffer-percent (percent)
+  (interactive "nPercent: ")
+  (goto-line
+   (truncate
+    (* (/ percent 100.0)
+       (count-lines (point-min) (point-max))))))
+
 ;; operations on buffer contents
 
 (defun end-of-list-p ()
