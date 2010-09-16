@@ -27,7 +27,8 @@
 (eval-when-compile
   (require 'cl))
 
-;; macros misc
+
+;;; macros misc
 
 (defmacro with-gensyms (syms &rest body)
   (declare (indent defun))
@@ -58,7 +59,13 @@
 (defmacro cmd (&rest body)
   `(lambda () (interactive) ,@body))
 
-;; anaphoric macros
+
+(defmacro defpathfn (name path)
+  `(defun ,name (&optional sub)
+     (expand-file-name (concat ,path (or sub "")))))
+
+
+;;; anaphoric macros
 
 (defmacro aif (test then &rest else)
   `(let ((it ,test))
@@ -88,7 +95,8 @@
          ((not it) ,res)
        (setf ,res (progn ,@body)))))
 
-;; operations on numbers
+
+;;; operations on numbers
 
 (defun posp (num) (> num 0))
 
@@ -139,7 +147,8 @@
   (sqrt (+ (expt (- y1 y2) 2)
            (expt (- x1 x2) 2))))
 
-;; operations on lists
+
+;;; operations on lists
 
 (defun add-all-to-list (list-var &rest args)
   (mapc (lambda (elt) (add-to-list list-var elt)) args))
@@ -256,7 +265,8 @@ determines whether a value is a sub-alist or a leaf."
          (,inner ',varform ,value)
          ,value))))
 
-;; operations on strings
+
+;;; operations on strings
 
 (defun strcat (&rest objs)
   (mapconcat (lambda (obj) (format "%s" obj)) objs ""))
@@ -264,7 +274,11 @@ determines whether a value is a sub-alist or a leaf."
 (defun symcat (&rest objs)
   (intern (apply 'strcat objs)))
 
-;; movement
+(defun join-string (str-lst &optional separator)
+  (mapconcat 'identity str-lst (or separator "")))
+
+
+;;; movement
 
 (defun pager-down (&optional arg)
   (interactive "P")
@@ -285,7 +299,8 @@ determines whether a value is a sub-alist or a leaf."
     (* (/ percent 100.0)
        (count-lines (point-min) (point-max))))))
 
-;; operations on buffer contents
+
+;;; operations on buffer contents
 
 (defun end-of-list-p ()
   (save-excursion
@@ -366,7 +381,8 @@ determines whether a value is a sub-alist or a leaf."
                         (thing-at-point 'char)))))
       (insert (matching-paren c)))))
 
-;; backward transposition
+
+;;; backward transposition
 
 (defmacro def-backward-transpose (things)
   `(defun ,(symcat 'backward-transpose- things) ()
@@ -379,7 +395,8 @@ determines whether a value is a sub-alist or a leaf."
 (def-backward-transpose paragraphs)
 (def-backward-transpose sexps)
 
-;; region operations
+
+;;; region operations
 
 (defun tlh-bounds-of-thing-at-point (thing)
   (if (eq thing 'defun)
@@ -411,7 +428,8 @@ determines whether a value is a sub-alist or a leaf."
   (append-to-file beg end (expand-file-name filename))
   (kill-region beg end))
 
-;; line region
+
+;;; line region
 
 (defun mark-line ()
   (interactive)
@@ -458,7 +476,8 @@ determines whether a value is a sub-alist or a leaf."
   (with-bounds 'line
     (duplicate-and-comment-region beg end)))
 
-;; paragraph region
+
+;;; paragraph region
 
 (defun comment-paragraph ()
   (interactive)
@@ -511,7 +530,8 @@ determines whether a value is a sub-alist or a leaf."
     (align-regexp beg end (concat "\\(\\s-*\\)" regexp) 1 1 nil)
     (untabify beg end)))
 
-;; defun region
+
+;;; defun region
 
 (defun comment-defun ()
   (interactive)
@@ -550,7 +570,14 @@ determines whether a value is a sub-alist or a leaf."
   (with-bounds 'defun
     (indent-region beg end)))
 
-;; buffer/file operations
+
+;;; buffer/file operations
+
+(defun buffer-file-name-cmd ()
+  (interactive)
+  (aif (buffer-file-name)
+       (message "%s" it)
+       (message "Buffer isn't visiting a file.")))
 
 (defun buffer-major-mode (buffer-or-name)
   (with-current-buffer buffer-or-name
@@ -566,13 +593,24 @@ determines whether a value is a sub-alist or a leaf."
 
 (defun delete-this-file ()
   (interactive)
-  (let ((filename (buffer-file-name)))
-    (or file-name (error "Buffer is not visiting a file."))
-    (when (yes-or-no-p "Really delete this file?")
-      (delete-file file-name)
-      (kill-this-buffer))))
+  (aif (buffer-file-name)
+       (when (yes-or-no-p (format "Delete %s?" it))
+         (delete-file it)
+         (kill-this-buffer))
+       (message "Buffer isn't visiting a file.")))
 
-;; windows operations
+(defun move-file-and-buffer (newname)
+  (interactive "FNew name: ")
+  (if (get-buffer newname)
+      (message "A buffer named '%s' already exists." newname)
+    (let ((filename (buffer-file-name)))
+      (if (not filename)
+          (message "Buffer isn't visiting a file.")
+        (rename-file filename newname 1)
+        (set-visited-file-name newname)
+        (set-buffer-modified-p nil)))))
+
+;;; windows operations
 
 (defun inc-window-height (&optional inc)
   (interactive "P")
@@ -594,13 +632,21 @@ determines whether a value is a sub-alist or a leaf."
   (interactive)
   (move-to-window-line (round (* (window-body-height) (/ n 10.0)))))
 
-;; frame operations
+
+;;; frame operations
 
 (defun refresh-frame ()
   (interactive)
   (redraw-frame (selected-frame)))
 
-;; misc
+
+;;; misc
+
+(defun add-path (path)
+  (add-to-list 'load-path path))
+
+(defun add-paths (&rest paths)
+  (mapc 'add-path paths))
 
 (defun sort-buffer-list (buffer-list &optional descending)
   "Alphabetically sorts BUFFER-LIST desctructively, in ascending
@@ -692,7 +738,7 @@ order unless DESCENDING is non-nil."
           1 font-lock-warning-face t))))
 
 (defun yow-comment ()
-  (format ";; %s\n\n" (replace-regexp-in-string "\n" " " (yow))))
+  (format ";;; %s\n\n" (replace-regexp-in-string "\n" " " (yow))))
 
 (defun get-scratch-buffer ()
   (interactive)
@@ -734,7 +780,8 @@ order unless DESCENDING is non-nil."
        ,@body
        (subtract-time (current-time) ,old))))
 
-;; buffer hook functions
+
+;;; buffer hook functions
 
 (defun unicode-lambdas ()
   (font-lock-add-keywords
@@ -749,8 +796,10 @@ order unless DESCENDING is non-nil."
 (defun remove-elc-on-save ()
   (add-hook (make-local-variable 'after-save-hook) 'remove-elc))
 
-;; provide
+
+;;; provide
 
 (provide 'tlh-util)
+
 
 ;;; tlh-util.el ends here
