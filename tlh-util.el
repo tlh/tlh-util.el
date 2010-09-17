@@ -96,7 +96,7 @@
        (setf ,res (progn ,@body)))))
 
 
-;;; operations on numbers
+;;; number operations
 
 (defun posp (num) (> num 0))
 
@@ -148,7 +148,7 @@
            (expt (- x1 x2) 2))))
 
 
-;;; operations on lists
+;;; list operations
 
 (defun add-all-to-list (list-var &rest args)
   (mapc (lambda (elt) (add-to-list list-var elt)) args))
@@ -266,7 +266,7 @@ determines whether a value is a sub-alist or a leaf."
          ,value))))
 
 
-;;; operations on strings
+;;; string operations
 
 (defun strcat (&rest objs)
   (mapconcat (lambda (obj) (format "%s" obj)) objs ""))
@@ -300,7 +300,7 @@ determines whether a value is a sub-alist or a leaf."
        (count-lines (point-min) (point-max))))))
 
 
-;;; operations on buffer contents
+;;; buffer content operations
 
 (defun end-of-list-p ()
   (save-excursion
@@ -428,8 +428,7 @@ determines whether a value is a sub-alist or a leaf."
   (append-to-file beg end (expand-file-name filename))
   (kill-region beg end))
 
-
-;;; line region
+;; line region
 
 (defun mark-line ()
   (interactive)
@@ -476,8 +475,7 @@ determines whether a value is a sub-alist or a leaf."
   (with-bounds 'line
     (duplicate-and-comment-region beg end)))
 
-
-;;; paragraph region
+;; paragraph region
 
 (defun comment-paragraph ()
   (interactive)
@@ -530,8 +528,7 @@ determines whether a value is a sub-alist or a leaf."
     (align-regexp beg end (concat "\\(\\s-*\\)" regexp) 1 1 nil)
     (untabify beg end)))
 
-
-;;; defun region
+;; defun region
 
 (defun comment-defun ()
   (interactive)
@@ -571,7 +568,16 @@ determines whether a value is a sub-alist or a leaf."
     (indent-region beg end)))
 
 
-;;; buffer/file operations
+;;; buffer operations
+
+(defun inhibit-backup-of-buffer ()
+  (interactive)
+  (set (make-local-variable 'backup-inhibited) t)
+  (message "Backup for this buffer is inhibited."))
+
+(defun switch-to-help-buffer ()
+  (interactive)
+  (switch-to-buffer (help-buffer)))
 
 (defun buffer-file-name-cmd ()
   (interactive)
@@ -590,6 +596,40 @@ determines whether a value is a sub-alist or a leaf."
 (defun kill-buffers-by-mode (mode)
   (interactive "SMode: ")
   (mapc 'kill-buffer (get-buffers-by-mode mode)))
+
+(defun sort-buffer-list (buffer-list &optional descending)
+  "Alphabetically sorts BUFFER-LIST desctructively, in ascending
+order unless DESCENDING is non-nil."
+  (sort buffer-list
+        (lambda (b1 b2) (let ((res (string< (buffer-name b2) (buffer-name b1))))
+                     (if descending res (not res))))))
+
+
+;;; file operations
+
+(defun operate-on-file (file operation)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (set-visited-file-name file)
+    (set-auto-mode)
+    (funcall operation)
+    (save-buffer)))
+
+(defun indent-file (file)
+  (operate-on-file file 'indent-buffer))
+
+(defun untabify-file (file)
+  (operate-on-file file 'untabify-buffer))
+
+(defun delete-trailing-whitespace-in-file (file)
+  (operate-on-file file 'delete-trailing-whitespace))
+
+(defun cleanup-file ()
+  (operate-of-file file 'cleanup-buffer))
+
+(defun remove-elc ()
+  (let ((elc (concat (buffer-file-name) "c")))
+    (and (file-exists-p elc) (delete-file elc))))
 
 (defun delete-this-file ()
   (interactive)
@@ -610,7 +650,23 @@ determines whether a value is a sub-alist or a leaf."
         (set-visited-file-name newname)
         (set-buffer-modified-p nil)))))
 
-;;; windows operations
+
+;;; directory operations
+
+(defun operate-on-directory-tree (root regexp operation)
+  (let ((files (directory-files root t "[^(\\.\\.\\|\\.)]")))
+    (dolist (file files)
+      (cond ((file-directory-p file)
+             (operate-on-directory-tree file regexp operation))
+            ((string-match regexp file)
+             (funcall operation file))))))
+
+(defun indent-directory-tree (root regexp)
+  (interactive "DRoot directory: \nsFile regexp: ")
+  (operate-on-directory-tree root regexp 'indent-file))
+
+
+;;; window operations
 
 (defun inc-window-height (&optional inc)
   (interactive "P")
@@ -647,26 +703,6 @@ determines whether a value is a sub-alist or a leaf."
 
 (defun add-paths (&rest paths)
   (mapc 'add-path paths))
-
-(defun sort-buffer-list (buffer-list &optional descending)
-  "Alphabetically sorts BUFFER-LIST desctructively, in ascending
-order unless DESCENDING is non-nil."
-  (sort buffer-list
-        (lambda (b1 b2) (let ((res (string< (buffer-name b2) (buffer-name b1))))
-                     (if descending res (not res))))))
-
-(defun remove-elc ()
-  (let ((elc (concat (buffer-file-name) "c")))
-    (and (file-exists-p elc) (delete-file elc))))
-
-(defun inhibit-backup-of-buffer ()
-  (interactive)
-  (set (make-local-variable 'backup-inhibited) t)
-  (message "Backup for this buffer is inhibited."))
-
-(defun switch-to-help-buffer ()
-  (interactive)
-  (switch-to-buffer (help-buffer)))
 
 (defun get-atoms (pred)
   (let (atoms)
@@ -786,15 +822,19 @@ order unless DESCENDING is non-nil."
 (defun unicode-lambdas ()
   (font-lock-add-keywords
    nil `(("(?\\(lambda\\>\\)"
-          (0 (progn (compose-region (match-beginning 1) (match-end 1)
-                                    ,(make-char 'greek-iso8859-7 107))
+          (0 (progn (compose-region
+                     (match-beginning 1)
+                     (match-end 1)
+                     ,(make-char 'greek-iso8859-7 107))
                     nil))))))
 
 (defun cleanup-buffer-on-save ()
-  (add-hook (make-local-variable 'before-save-hook) 'cleanup-buffer))
+  (add-hook (make-local-variable 'before-save-hook)
+            'cleanup-buffer))
 
 (defun remove-elc-on-save ()
-  (add-hook (make-local-variable 'after-save-hook) 'remove-elc))
+  (add-hook (make-local-variable 'after-save-hook)
+            'remove-elc))
 
 
 ;;; provide
