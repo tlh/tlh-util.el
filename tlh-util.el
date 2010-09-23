@@ -59,7 +59,6 @@
 (defmacro cmd (&rest body)
   `(lambda () (interactive) ,@body))
 
-
 (defmacro defpathfn (name path)
   `(defun ,name (&optional sub)
      (expand-file-name (concat ,path (or sub "")))))
@@ -188,6 +187,19 @@
           seq)
     (nreverse acc)))
 
+;; Proper recursive definition of reduce:
+;;
+;; (defun reduce (fn lst seed)
+;;   (if (not lst)
+;;       seed
+;;     (fold fn (funcall fn (car lst) seed) (cdr lst))))
+
+;; Iterative definition of reduce. Doesn't overflow the stack:
+
+(defun reduce (fn lst seed)
+  (dolist (elt lst seed)
+    (setq seed (funcall fn elt seed))))
+
 (defun confined-nth (n lst)
   (nth (confine-to 0 (1- (length lst)) n) lst))
 
@@ -207,6 +219,9 @@
 (defun lastn (lst n)
   (let ((l (length lst)))
     (copy-list (nthcdr (- l n) lst))))
+
+(defun list-insert (elt n lst)
+  (append (firstn lst n) (list elt) (nthcdr n lst)))
 
 (defun group (lst n)
   "Iterative version that avoids stack overflow on long lists."
@@ -265,6 +280,17 @@ determines whether a value is a sub-alist or a leaf."
          (,inner ',varform ,value)
          ,value))))
 
+(defun every? (pred lst)
+  (catch 'result
+    (dolist (elt lst t)
+      (unless (funcall pred elt)
+        (throw 'result nil)))))
+
+(defun some? (pred lst)
+  (catch 'result
+    (dolist (elt lst nil)
+      (when (funcall pred elt)
+        (throw 'result elt)))))
 
 ;;; string operations
 
@@ -380,6 +406,16 @@ determines whether a value is a sub-alist or a leaf."
                        (string-to-char
                         (thing-at-point 'char)))))
       (insert (matching-paren c)))))
+
+(defun delete-surrounding-whitespace ()
+  (interactive)
+  (delete-region
+   (progn
+     (skip-chars-forward "[:space:]")
+     (point))
+   (progn
+     (skip-chars-backward "[:space:]")
+     (point))))
 
 
 ;;; backward transposition
@@ -602,7 +638,7 @@ determines whether a value is a sub-alist or a leaf."
 order unless DESCENDING is non-nil."
   (sort buffer-list
         (lambda (b1 b2) (let ((res (string< (buffer-name b2) (buffer-name b1))))
-                     (if descending res (not res))))))
+                          (if descending res (not res))))))
 
 
 ;;; file operations
@@ -654,7 +690,7 @@ order unless DESCENDING is non-nil."
 ;;; directory operations
 
 (defun operate-on-directory-tree (root regexp operation)
-  (let ((files (directory-files root t "[^(\\.\\.\\|\\.)]")))
+  (let ((files (cddr (directory-files root t))))
     (dolist (file files)
       (cond ((file-directory-p file)
              (operate-on-directory-tree file regexp operation))
