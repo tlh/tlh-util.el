@@ -187,47 +187,26 @@
           seq)
     (nreverse acc)))
 
-;; Proper recursive definition of reduce:
-;;
-;; (defun reduce (fn lst seed)
-;;   (if (not lst)
-;;       seed
-;;     (fold fn (funcall fn (car lst) seed) (cdr lst))))
-
-;; Iterative definition of reduce. Doesn't overflow the stack:
-
-(defun reduce (fn lst seed)
-  (dolist (elt lst seed)
-    (setq seed (funcall fn elt seed))))
-
 (defun confined-nth (n lst)
   (nth (confine-to 0 (1- (length lst)) n) lst))
 
-(defun firstn (lst n)
-  (let ((i 0) acc)
-    (catch 'result
-      (dolist (elt lst)
-        (when (>= i n)
-          (throw 'result nil))
-        (push elt acc)
-        (incf i)))
-    (nreverse acc)))
+(defun take (lst n)
+  "Return a list of the first N elts in LST."
+  (butlast lst (- (length lst) n)))
 
-(defun lastn (lst n)
-  (nreverse (firstn (reverse lst) n)))
-
-(defun lastn (lst n)
-  (let ((l (length lst)))
-    (copy-list (nthcdr (- l n) lst))))
+(defun leave (lst n)
+  "Return a list of the last N elts in LST."
+  (nthcdr (- (length lst) n) lst))
 
 (defun list-insert (elt n lst)
-  (append (firstn lst n) (list elt) (nthcdr n lst)))
+  (append (take lst n) (list elt) (nthcdr n lst)))
 
 (defun group (lst n)
-  "Iterative version that avoids stack overflow on long lists."
-  (let ((lst lst) acc)
+  "Group LST into contiguous N-length sublists.
+Iterative to prevent stack overflow."
+  (let (acc)
     (while lst
-      (push (firstn lst n) acc)
+      (push (take lst n) acc)
       (setq lst (nthcdr n lst)))
     (nreverse acc)))
 
@@ -280,17 +259,21 @@ determines whether a value is a sub-alist or a leaf."
          (,inner ',varform ,value)
          ,value))))
 
-(defun every? (pred lst)
-  (catch 'result
-    (dolist (elt lst t)
-      (unless (funcall pred elt)
-        (throw 'result nil)))))
-
 (defun some? (pred lst)
   (catch 'result
     (dolist (elt lst nil)
       (when (funcall pred elt)
         (throw 'result elt)))))
+
+(defun swap (elt1 elt2 lst)
+  "Return a copy of LST with ELT1 with ELT2 swapped."
+  (let* ((lst (copy lst))
+         (l1  (member elt1 lst))
+         (l2  (member elt2 lst)))
+    (setcar l1 elt2)
+    (setcar l2 elt1)
+    lst))
+
 
 ;;; string operations
 
@@ -407,15 +390,12 @@ determines whether a value is a sub-alist or a leaf."
                         (thing-at-point 'char)))))
       (insert (matching-paren c)))))
 
-(defun delete-surrounding-whitespace ()
+(defun delete-surrounding-whitespace (&optional whitespace-chars)
   (interactive)
-  (delete-region
-   (progn
-     (skip-chars-forward "[:space:]")
-     (point))
-   (progn
-     (skip-chars-backward "[:space:]")
-     (point))))
+  (let ((chars (or whitespace-chars "\n\t ")))
+    (delete-region
+     (progn (skip-chars-backward chars) (point))
+     (progn (skip-chars-forward  chars) (point)))))
 
 
 ;;; backward transposition
@@ -686,6 +666,13 @@ order unless DESCENDING is non-nil."
         (set-visited-file-name newname)
         (set-buffer-modified-p nil)))))
 
+(defun reopen-file-as-root ()
+  (interactive)
+  (when buffer-file-name
+    (find-alternate-file
+     (concat "/sudo:root@localhost:"
+             buffer-file-name))))
+
 
 ;;; directory operations
 
@@ -700,6 +687,21 @@ order unless DESCENDING is non-nil."
 (defun indent-directory-tree (root regexp)
   (interactive "DRoot directory: \nsFile regexp: ")
   (operate-on-directory-tree root regexp 'indent-file))
+
+(defun count-lines-in-directory-tree (dir fregx)
+  (interactive "DDir: \nsFile regexp: ")
+  (let ((count 0))
+    (flet ((inner
+            (dir)
+            (dolist (file (directory-files dir t ".*\\([^.]\\|[^.][^.]\\)$"))
+              (if (file-directory-p file)
+                  (inner file)
+                (when (string-match fregx file)
+                  (with-temp-buffer
+                    (insert-file-contents file)
+                    (incf count (count-lines (point-min) (point-max)))))))))
+      (inner (expand-file-name dir))
+      (message "Total lines in %S: %s" dir count))))
 
 
 ;;; window operations
@@ -837,8 +839,8 @@ order unless DESCENDING is non-nil."
 (defun mbq-symbol-at-point (prompt)
   (list (read-from-minibuffer prompt (thing-at-point 'symbol))))
 
-(defun slider (val &optional len knob-str)
-  (let* ((len (or len 100))
+(defun slider (val len &optional knob-str)
+  (let* ((len (max 0 (truncate len)))
          (pos (truncate (rescale val 0 100 0 len)))
          (knob-str (or knob-str "O")))
     (format "[%s%s%s]"
@@ -851,6 +853,21 @@ order unless DESCENDING is non-nil."
     `(let ((,old (current-time)))
        ,@body
        (subtract-time (current-time) ,old))))
+
+(defun generate-password (len)
+  (interactive "nPassword length: ")
+  (let* ((chars "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+         (limit (length chars))
+         (password ""))
+    (dotimes (i len password)
+      (setq password
+            (concat password
+                    (char-to-string
+                     (aref chars (random limit))))))
+    (with-temp-buffer
+      (insert password)
+      (kill-ring-save (point-min) (point-max)))
+    (message password)))
 
 
 ;;; buffer hook functions
