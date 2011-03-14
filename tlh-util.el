@@ -24,8 +24,7 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'cl))
+(require 'cl)
 
 
 ;;; macros misc
@@ -183,7 +182,7 @@
 (defun filter (pred seq)
   (let (acc)
     (mapc (lambda (elt) (and (funcall pred elt)
-                        (setq acc (cons elt acc))))
+                             (setq acc (cons elt acc))))
           seq)
     (nreverse acc)))
 
@@ -224,6 +223,12 @@ determines whether a value is a sub-alist or a leaf."
     (inner tree)))
 
 (defun last1 (lst) (car (last lst)))
+
+(defun wg-zip-lists (&rest lists)
+  "Return a list of lists of the nth elt from each list in LIST."
+  (when (some 'identity lists)
+    (cons (mapcar 'car lists)
+          (apply 'wg-zip-lists (mapcar 'cdr lists)))))
 
 (defun left-rotate (lst)
   (append (cdr lst) (list (car lst))))
@@ -386,16 +391,23 @@ determines whether a value is a sub-alist or a leaf."
     (while (ignore-errors
              (setq c (save-excursion
                        (backward-up-list)
-                       (string-to-char
-                        (thing-at-point 'char)))))
+                       (string-to-char (thing-at-point 'char)))))
       (insert (matching-paren c)))))
 
 (defun delete-surrounding-whitespace (&optional whitespace-chars)
   (interactive)
-  (let ((chars (or whitespace-chars "\n\t ")))
+  (let ((chars (or whitespace-chars "\n\t\f ")))
     (delete-region
      (progn (skip-chars-backward chars) (point))
      (progn (skip-chars-forward  chars) (point)))))
+
+;; (defun delete-surrounding-whitespace ()
+;;   (interactive)
+;;   (delete-region
+;;    (save-excursion (search-backward-regexp "[^[:space:]]"))
+;;    (save-excursion (search-forward-regexp "[^[:space:]]"))))
+
+
 
 
 ;;; backward transposition
@@ -444,7 +456,17 @@ determines whether a value is a sub-alist or a leaf."
   (append-to-file beg end (expand-file-name filename))
   (kill-region beg end))
 
-;; line region
+(defun paren-wrap-thing-at-point (thing)
+  "Wrap thing-at-point in parens"
+  (save-excursion
+    (with-bounds thing
+      (goto-char beg)
+      (insert "(")
+      (goto-char (1+ end))
+      (insert ")"))))
+
+
+;;; line region
 
 (defun mark-line ()
   (interactive)
@@ -491,7 +513,8 @@ determines whether a value is a sub-alist or a leaf."
   (with-bounds 'line
     (duplicate-and-comment-region beg end)))
 
-;; paragraph region
+
+;;; paragraph region
 
 (defun comment-paragraph ()
   (interactive)
@@ -544,7 +567,8 @@ determines whether a value is a sub-alist or a leaf."
     (align-regexp beg end (concat "\\(\\s-*\\)" regexp) 1 1 nil)
     (untabify beg end)))
 
-;; defun region
+
+;;; defun region
 
 (defun comment-defun ()
   (interactive)
@@ -582,6 +606,13 @@ determines whether a value is a sub-alist or a leaf."
   (interactive)
   (with-bounds 'defun
     (indent-region beg end)))
+
+
+;;; sexp region
+
+(defun paren-wrap-sexp ()
+  (interactive)
+  (paren-wrap-thing-at-point 'sexp))
 
 
 ;;; buffer operations
